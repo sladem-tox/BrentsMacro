@@ -81,7 +81,13 @@ def copy_columns_by_row_check_threshold(
 
     keep_vba = workbook_path.suffix.lower() == ".xlsm"
     workbook = load_workbook(workbook_path, keep_vba=keep_vba)
+    cached_workbook = load_workbook(
+        workbook_path, keep_vba=keep_vba, data_only=True, read_only=True
+    )
     source = workbook[source_sheet] if source_sheet else workbook.active
+    source_values = (
+        cached_workbook[source_sheet] if source_sheet else cached_workbook.active
+    )
     start_col, end_col = _parse_column_range(columns)
     start_row, end_row = _parse_row_range(rows)
     if check_row > MAX_EXCEL_ROW:
@@ -99,17 +105,15 @@ def copy_columns_by_row_check_threshold(
 
     copied = 0
     for source_col in range(start_col, end_col + 1):
-        numeric_value = _numeric_value(source.cell(check_row, source_col).value)
+        numeric_value = _numeric_value(source_values.cell(check_row, source_col).value)
         if numeric_value is not None and numeric_value <= threshold:
             for offset, row_number in enumerate(range(start_row, end_row + 1), start=1):
-                destination.cell(offset, 4 + copied).value = source.cell(
+                destination.cell(offset, 4 + copied).value = source_values.cell(
                     row_number, source_col
                 ).value
             copied += 1
 
-    output = Path(output_path) if output_path else workbook_path.with_name(
-        f"{workbook_path.stem}_filtered{workbook_path.suffix}"
-    )
+    output = Path(output_path) if output_path else workbook_path
     workbook.save(output)
     return output, copied
 
@@ -119,14 +123,39 @@ def main() -> None:
         description="Copy columns whose check-row value is at or below a threshold."
     )
     parser.add_argument("workbook", type=Path)
-    parser.add_argument("--columns", required=True, help="Column range, e.g. BR:EG")
-    parser.add_argument("--rows", required=True, help="Row range, e.g. 1:35")
-    parser.add_argument("--threshold", required=True, type=float)
-    parser.add_argument("--check-row", required=True, type=int)
+    parser.add_argument(
+        "--list-sheets",
+        action="store_true",
+        help="List worksheet names and exit without modifying the workbook",
+    )
+    parser.add_argument("--columns", help="Column range, e.g. BR:EG")
+    parser.add_argument("--rows", help="Row range, e.g. 1:35")
+    parser.add_argument("--threshold", type=float)
+    parser.add_argument("--check-row", type=int)
     parser.add_argument("--destination-sheet", default="Filtered")
     parser.add_argument("--source-sheet")
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
+
+    if args.list_sheets:
+        keep_vba = args.workbook.suffix.lower() == ".xlsm"
+        workbook = load_workbook(args.workbook, keep_vba=keep_vba, read_only=True)
+        for sheet_name in workbook.sheetnames:
+            print(sheet_name)
+        return
+
+    missing = [
+        option
+        for option, value in (
+            ("--columns", args.columns),
+            ("--rows", args.rows),
+            ("--threshold", args.threshold),
+            ("--check-row", args.check_row),
+        )
+        if value is None
+    ]
+    if missing:
+        parser.error("the following arguments are required: " + ", ".join(missing))
 
     output, copied = copy_columns_by_row_check_threshold(
         args.workbook,

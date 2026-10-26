@@ -11,9 +11,16 @@ Install dependencies and run:
 ```powershell
 uv sync
 uv run brentsmacro Final_StudentData_2026_MacroVersion_Blank.xlsm `
-  --columns BR:EG --rows 1:35 --threshold 3 --check-row 35 `
-  --destination-sheet Filtered --output Final_StudentData_2026_filtered.xlsm
+  --source-sheet Untreated_Normalised --columns FQ:MD --rows 1:35 --threshold 3 --check-row 35 `
+  --destination-sheet Filtered
 ```
 
-For `.xlsm` input, the VBA project is preserved. If `--output` is omitted, the
-script writes a sibling file with `_filtered` appended to its name.
+For `.xlsm` input, the VBA project is preserved. By default, the named
+destination worksheet is updated in the input workbook. Use `--output` to write
+to a separate workbook instead.
+
+To list the worksheets without changing the workbook:
+
+```powershell
+uv run brentsmacro Final_StudentData_2026_MacroVersion_Blank.xlsm --list-sheets
+```
